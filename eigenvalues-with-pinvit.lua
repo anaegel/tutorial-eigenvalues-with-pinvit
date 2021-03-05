@@ -35,6 +35,7 @@ poissonDisc = DomainDiscretization(approxSpace)
 velectron = GridFunction(approxSpace)
 velectron:set(0.0)
 
+
 -- External potential (nucleus-electron)
 local nucleiDesc = {
     { Z = 1, pos = {0.3, 0.4, 0.1}}
@@ -61,6 +62,14 @@ temp:set(0.0)
 Interpolate("myExtPotential", temp, "u")
 WriteGridFunctionToVTK(temp, "vext")
 
+
+-- XC Potential
+density = GridFunction(approxSpace)
+density:set(0.0)
+
+xcPotential = XCFunctionalUserData(1)
+xcPotential:set_density(GridFunctionNumberData(density, "u")) --
+
 disc = "fe"
 
 local myElemDisc = ConvectionDiffusion("u", "Inner", disc)
@@ -69,6 +78,7 @@ myElemDisc:set_diffusion(0.5)
 local veff=ScaleAddLinkerNumber()
 veff:add(1.0, LuaUserNumber("myExtPotential"))       -- vext
 veff:add(1.0, GridFunctionNumberData(velectron,"u")) -- vhartree
+veff:add(1.0, xcPotential)  -- vxc 
 myElemDisc:set_reaction_rate(veff)
 domainDisc:add(myElemDisc)
 
@@ -132,6 +142,9 @@ for i=1,evNumber do
     rho:add(phi,phi)
 end
 
+
+-- Interpolate(rho, density, "u")
+
 -- Define matrix on left and right hand side
 A = MatrixOperator()
 domainDisc:assemble_stiffness_matrix(A, u[1])
@@ -185,13 +198,14 @@ function PoissonSolver(u, rhs, solver, poissonDisc)
     local clock = CuckooClock()
     local A = AssembledLinearOperator(poissonDisc)
     poissonDisc:assemble_linear(A, rhs)
-    WriteGridFunctionToVTK(rhs, "rho")
-
+ 
     -- Call solver
     clock:tic()
     solver:init(A, u) -- boundary values
     solver:apply_return_defect(u,rhs)
+    
     print ("Poisson solver: "..clock:toc().." seconds.")
+    WriteGridFunctionToVTK(rhs, "rho")
 end    
 
 local myElemDisc = ConvectionDiffusion("u", "Inner", disc)
@@ -202,6 +216,7 @@ poissonDisc:add(myElemDisc)
 
 poissonDisc:add(myDirichletBND)
 
+ChangeParallelStorageTypeToAdditive3dCPU1(temp)
 PoissonSolver(velectron, temp, lsolver, poissonDisc)
 
 WriteGridFunctionToVTK(velectron, "velectron")
