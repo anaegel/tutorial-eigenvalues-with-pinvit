@@ -41,7 +41,7 @@ local nucleiDesc = {
 
 function myExtPotential(x, y, z, t)
    
-    local sum = 0.0
+    local sum = 10.0    -- Add Shift so eigenvalues are positive.
     for i,nucleus in ipairs(nucleiDesc) do
         local mycontrib = 0.0
         local rx = (x-nucleus.pos[1]);
@@ -61,7 +61,7 @@ Interpolate("myExtPotential", temp, "u")
 WriteGridFunctionToVTK(temp, "vext")
 
 -- 
-evNumber = 10
+evNumber = 2--10
 
 -- Kohn-Sham configuration.
 local ks = KohnShamData()
@@ -160,32 +160,32 @@ local rho = CreateDensityLinker(u, evNumber)
 
 -- Define matrix on left and right hand side
 function CreatePINVITSolver(domainDisc)
-local A = MatrixOperator()
-domainDisc:assemble_stiffness_matrix(A, u[1])
+    local A = MatrixOperator()
+    domainDisc:assemble_stiffness_matrix(A, u[1])
 
-local B = MatrixOperator()
-domainDisc:assemble_mass_matrix(B, u[1])
+    local B = MatrixOperator()
+    domainDisc:assemble_mass_matrix(B, u[1])
 
--- Define PINVIT.
-local evIterations = 50  -- number of iterations of the eigenvalue solver
-local evPrec = 1e-3       -- precision of the eigenvalue solver
-local evKeep = 8
+    -- Define PINVIT.
+    local evIterations = 50  -- number of iterations of the eigenvalue solver
+    local evPrec = 1e-3       -- precision of the eigenvalue solver
+    local evKeep = 8
 
-local pinvit = EigenSolver()
-pinvit:set_linear_operator_A(A)
-pinvit:set_linear_operator_B(B)
-pinvit:set_max_iterations(evIterations)
-pinvit:set_precision(evPrec)
-pinvit:set_preconditioner(gmg)
-pinvit:set_pinvit(2) -- ?
-pinvit:set_additional_eigenvectors_to_keep(evKeep)
+    local pinvit = EigenSolver()
+    pinvit:set_linear_operator_A(A)
+    pinvit:set_linear_operator_B(B)
+    pinvit:set_max_iterations(evIterations)
+    pinvit:set_precision(evPrec)
+    pinvit:set_preconditioner(gmg)
+    pinvit:set_pinvit(2) -- ?
+    pinvit:set_additional_eigenvectors_to_keep(evKeep)
 
--- Add vectors.
-for i=1,evNumber do
-    pinvit:add_vector(u[i])
-end
+    -- Add vectors.
+    for i=1,evNumber do
+        pinvit:add_vector(u[i])
+    end
 
-return pinvit
+    return pinvit
 end
 
 
@@ -250,16 +250,30 @@ function PoissonSolver(u, rhs, solver, poissonDisc)
     WriteGridFunctionToVTK(rhs, "rho")
 end    
 
+-- Loop until SCF convergence.
+for i = 0,10 do
+    print("SCF-Iteration: " .. i)
+    
+    local poissonDisc = CreatePoissonDisc(rho, myDirichletBND)
 
+    ChangeParallelStorageTypeToAdditive3dCPU1(temp)
+    PoissonSolver(velectron, temp, lsolver, poissonDisc)
 
+    WriteGridFunctionToVTK(velectron, "velectron")
+    
+    local A = MatrixOperator()
+    domainDisc:assemble_stiffness_matrix(A, u[1])
 
-local poissonDisc = CreatePoissonDisc(rho, myDirichletBND)
+    local B = MatrixOperator()
+    domainDisc:assemble_mass_matrix(B, u[1])
 
-ChangeParallelStorageTypeToAdditive3dCPU1(temp)
-PoissonSolver(velectron, temp, lsolver, poissonDisc)
+    pinvit:set_linear_operator_A(A)
+    pinvit:set_linear_operator_B(B)
+    
+    SolveEigenvalueProblem(pinvit, domainDisc, u, evNumber)
 
-WriteGridFunctionToVTK(velectron, "velectron")
-
-
+    ks:update_density()
+    ks:update_vxc()
+end
 
 
