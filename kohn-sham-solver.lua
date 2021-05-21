@@ -6,11 +6,11 @@ ug_load_script("util/refinement_util.lua")
 -- initialize ug with the world dimension and the algebra type
 InitUG(3, AlgebraType("CPU", 1));
 
-numRefs = 4 -- 7 
+numRefs = 5 -- 7 
 
 -- Load a domain without initial refinements.
 -- Refine the domain (parallel redistribution is handled internally!)
-local gridName = "laplace_sample_grid_3d.ugx" -- grid name
+local gridName = "cube10_3d.ugx" -- grid name
 local requiredSubsets = {"Inner", "Boundary"}
 
 dom = util.CreateDomain(gridName, 0, requiredSubsets)
@@ -36,12 +36,12 @@ domainDisc = DomainDiscretization(approxSpace)
 
 -- External potential (nucleus-electron)
 local nucleiDesc = {
-    { Z = 1, pos = {0.3, 0.4, 0.1}}
+    { Z = 2.0, pos = {0.01, 0.04, 0.01}}
 }
 
 function myExtPotential(x, y, z, t)
    
-    local sum = 10.0    -- Add Shift so eigenvalues are positive.
+    local sum = 2.0    -- Add Shift so eigenvalues are positive.
     for i,nucleus in ipairs(nucleiDesc) do
         local mycontrib = 0.0
         local rx = (x-nucleus.pos[1]);
@@ -61,7 +61,7 @@ Interpolate("myExtPotential", temp, "u")
 WriteGridFunctionToVTK(temp, "vext")
 
 -- 
-evNumber = 2--10
+evNumber = 1+4+9--10
 
 -- Kohn-Sham configuration.
 local ks = KohnShamData()
@@ -83,12 +83,12 @@ density:set(0.0)
 disc = "fe"
 
 local myElemDisc = ConvectionDiffusion("u", "Inner", disc)
-myElemDisc:set_diffusion(0.5)
+myElemDisc:set_diffusion(1.0)
 
 local veff=ScaleAddLinkerNumber()
 veff:add(1.0, LuaUserNumber("myExtPotential"))       -- vext
-veff:add(1.0, GridFunctionNumberData(velectron,"u")) -- vhartree
-veff:add(1.0, ks:get_vxc())                          -- vxc 
+-- veff:add(1.0, GridFunctionNumberData(velectron,"u")) -- vhartree
+--veff:add(1.0, ks:get_vxc())                          -- vxc 
 myElemDisc:set_reaction_rate(veff)
 domainDisc:add(myElemDisc)
 
