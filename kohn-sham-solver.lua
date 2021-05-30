@@ -36,7 +36,8 @@ domainDisc = DomainDiscretization(approxSpace)
 
 -- External potential (nucleus-electron)
 local nucleiDesc = {
-    { Z = 2.0, pos = {0.01, 0.04, 0.01}}
+    { Z = 2.0, pos = {1.51169, 0.001, 0.001}},
+    { Z = 1.0, pos = {0.001, 0.001, 0.001}}
 }
 
 function myExtPotential(x, y, z, t)
